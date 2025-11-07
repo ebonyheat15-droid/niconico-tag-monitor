@@ -15,6 +15,7 @@ jobs:
       - run: |
           echo "DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}" >> $GITHUB_ENV
           echo "VIDEOS=${{ secrets.VIDEOS }}" >> $GITHUB_ENV
+          echo "REQUIRED_TAGS=${{ secrets.REQUIRED_TAGS }}" >> $GITHUB_ENV    # ← これを追加
       - run: python monitor_niconico.py --state state.json
       - uses: actions/upload-artifact@v4
         with:
