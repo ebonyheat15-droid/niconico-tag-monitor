@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NicoNico Tag Monitor (Discord-first + 必須タグチェック + 任意クールダウン)
+NicoNico Tag Monitor (Discord-first + 必須タグ「毎回」通知版)
 - 30分おきなどに実行して、各動画のタグを取得
 - 1) 前回あって今回ないタグ（削除）を検知して通知
-- 2) REQUIRED_TAGS で指定した必須タグが1つでも欠けていれば通知
-     - 欠落セットが変わったら即通知
-     - REQUIRED_TAGS_COOLDOWN_MINUTES > 0 なら、同じ欠落が継続中でもその間隔で再通知
+- 2) REQUIRED_TAGS で指定した必須タグが1つでも欠けていれば、
+     欠落が直るまで「実行のたび毎回」通知（クールダウンなし）
 - 通知先は Discord（必須）/ Teams（任意）
 
 環境変数（Secrets 推奨）:
@@ -14,7 +13,6 @@ NicoNico Tag Monitor (Discord-first + 必須タグチェック + 任意クール
   TEAMS_WEBHOOK_URL="https://..."                                 (任意)
   VIDEOS="sm9,sm12345678"                                         (監視smID カンマ区切り)
   REQUIRED_TAGS="タグA,タグB"                                     (必須タグ カンマ区切り; 未設定なら無効)
-  REQUIRED_TAGS_COOLDOWN_MINUTES="180"                            (任意: 欠落継続時の再通知間隔 分; 未設定or0で無効)
   USER_AGENT="..."                                                (任意)
 """
 
@@ -65,14 +63,6 @@ def parse_required_tags() -> Set[str]:
     if not raw.strip():
         return set()
     return {t.strip() for t in raw.split(",") if t.strip()}
-
-def get_cooldown_seconds() -> int:
-    """REQUIRED_TAGS_COOLDOWN_MINUTES を秒に変換。未設定/不正は0。"""
-    try:
-        mins = int(os.getenv("REQUIRED_TAGS_COOLDOWN_MINUTES", "0").strip())
-        return max(0, mins) * 60
-    except Exception:
-        return 0
 
 # -------------------- タグ取得 --------------------
 
@@ -210,16 +200,14 @@ def main():
     state_path = Path(args.state)
     state = load_state(state_path)
 
-    cooldown_sec = get_cooldown_seconds()
     now_ts = int(time.time())
-
     exit_code = 0
 
     for vid in video_ids:
         try:
             now_tags, meta = fetch_tags(vid)
 
-            # -------- 1) 削除検知 --------
+            # -------- 1) 削除検知（従来機能） --------
             prev = set(state.get(vid, {}).get("tags", []))
             removed = prev - now_tags if prev else set()
             if removed:
@@ -228,32 +216,18 @@ def main():
                 if not sent:
                     logging.warning("削除通知の送信に失敗（Discord/Teamsの設定を確認）")
 
-            # -------- 2) 必須タグ検知 --------
+            # -------- 2) 必須タグ検知（毎回通知版） --------
             missing_required = set()
             if required:
+                # 大文字小文字の違いなどを吸収したい場合は正規化を検討（日本語タグ想定なのでそのまま一致）
                 missing_required = required - now_tags
-
-                prev_missing = set(state.get(vid, {}).get("last_missing_required", []))
-                last_notify_ts = int(state.get(vid, {}).get("last_missing_required_notified_at", 0))
-
-                should_notify = False
                 if missing_required:
-                    # 欠落セットが変化 → 即通知
-                    if missing_required != prev_missing:
-                        should_notify = True
-                    # 同じ欠落が継続中でも、クールダウン経過で再通知
-                    elif cooldown_sec > 0 and (now_ts - last_notify_ts) >= cooldown_sec:
-                        should_notify = True
-
-                if should_notify:
                     msg = format_missing_required_message(vid, meta, missing_required, now_tags)
                     sent = notify_discord(msg) or notify_teams(msg)
                     if not sent:
                         logging.warning("必須タグ欠落の通知送信に失敗（Discord/Teamsの設定を確認）")
-                    # 通知時刻を更新
-                    state.setdefault(vid, {})["last_missing_required_notified_at"] = now_ts
 
-                # 状態を保存（次回比較用）
+                # 次回比較用に保存（今は毎回通知なので参照はしないが、将来拡張用に保持）
                 state.setdefault(vid, {})["last_missing_required"] = sorted(list(missing_required))
 
             # タグの最新状態も保存（削除検知用）
