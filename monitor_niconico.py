@@ -190,27 +190,17 @@ def main():
                 if not sent:
                     logging.warning("削除通知の送信に失敗（Discord/Teamsの設定を確認）")
 
-            # --- 必須タグ検知（新機能） ---
-            missing_required = set()
-            if required:
-                # 大文字小文字は区別しない運用にしたい場合は .lower() を使って正規化
-                # ここでは「表記そのまま一致」運用（日本語タグの想定）
-                missing_required = required - now_tags
-
-                # 同じ「欠落」メッセージを毎回送らないよう、直前状態と比較して変化時だけ通知
-                prev_missing = set(state.get(vid, {}).get("last_missing_required", []))
-                if missing_required != prev_missing:
-                    if missing_required:
-                        msg = format_missing_required_message(vid, meta, missing_required, now_tags)
-                        sent = notify_discord(msg) or notify_teams(msg)
-                        if not sent:
-                            logging.warning("必須タグ欠落の通知送信に失敗（Discord/Teamsの設定を確認）")
-                    else:
-                        # 復帰（全部そろった）時も知らせたい場合はここで通知を送ってもよい
-                        logging.info("必須タグが復帰: %s", vid)
-
-                # 状態を保存
-                state.setdefault(vid, {})["last_missing_required"] = sorted(list(missing_required))
+# --- 必須タグ検知（毎回通知版） ---
+missing_required = set()
+if required:
+    missing_required = required - now_tags
+    if missing_required:
+        msg = format_missing_required_message(vid, meta, missing_required, now_tags)
+        sent = notify_discord(msg) or notify_teams(msg)
+        if not sent:
+            logging.warning("必須タグ欠落の通知送信に失敗（Discord/Teamsの設定を確認）")
+    # 状態は保持しておいてOK（他の用途に使うので）
+    state.setdefault(vid, {})["last_missing_required"] = sorted(list(missing_required))
 
             # 最後に最新タグを保存（削除検知に使う）
             state.setdefault(vid, {})
