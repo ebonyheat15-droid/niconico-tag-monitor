@@ -1,10 +1,7 @@
 name: niconico-tag-monitor
 on:
   schedule:
-    # JST 06:00〜08:59（= UTC 21:00〜23:59）
-    - cron: "*/10 21-23 * * *"
-    # JST 09:00〜22:59（= UTC 00:00〜13:59）
-    - cron: "*/10 0-13 * * *"
+    - cron: "*/10 21-23,0-13 * * *"  # UTCで21–23時と0–13時 → JSTで06:00–22:59
   workflow_dispatch:
 jobs:
   run:
