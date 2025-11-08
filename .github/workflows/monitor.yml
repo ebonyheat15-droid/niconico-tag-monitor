@@ -1,8 +1,11 @@
 name: niconico-tag-monitor
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/10 * * * *"     # （残してOK。効いていなくても外部で回せる）
   workflow_dispatch:
+  repository_dispatch:
+    types: [run-nico]          # 任意のイベント名（このままでOK）
+
 jobs:
   run:
     runs-on: ubuntu-latest
