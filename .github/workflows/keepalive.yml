@@ -1,0 +1,26 @@
+name: keepalive
+on:
+  repository_dispatch:
+    types: [keepalive]   # 外部から起動するイベント名
+  workflow_dispatch:     # 手動で起動もできる（任意）
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    # GITHUB_TOKEN で push できるように
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write heartbeat file
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/HEARTBEAT
+
+      - name: Commit & push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/HEARTBEAT
+          git commit -m "chore: heartbeat [skip ci]" || echo "no changes"
+          git push
